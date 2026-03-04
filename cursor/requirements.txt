@@ -1,5 +1,5 @@
 Flask
-pillow
 python-barcode
+pillow
 openpyxl
-reportlab
+gunicorn
