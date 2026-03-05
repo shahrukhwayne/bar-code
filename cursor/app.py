@@ -132,9 +132,9 @@ def create_app():
 
         barcode_options = {
             "module_width": 0.7,
-            "module_height": 30,
+            "module_height": 35,
             "font_size": 0,
-            "quiet_zone": 12, 
+            "quiet_zone": 12,
             "dpi": 600
         }
 
