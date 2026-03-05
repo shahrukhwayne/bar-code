@@ -1,330 +1,260 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>QR + Barcode Generator</title>
-    <style>
-      * {
-        box-sizing: border-box;
-      }
+<head>
 
-      body {
-        margin: 0;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        background: #ffffff;
-        color: #111111;
-      }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-      .wrap {
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 24px 14px;
-      }
+<title>Barcode Generator</title>
 
-      .card {
-        width: 100%;
-        max-width: 980px;
-        background: #ffffff;
-        border: 1px solid #dddddd;
-        border-radius: 10px;
-        padding: 18px;
-      }
+<style>
 
-      h1 {
-        margin: 0 0 8px;
-        font-size: 24px;
-        letter-spacing: 0.2px;
-      }
+*{
+box-sizing:border-box;
+}
 
-      p {
-        margin: 0 0 16px;
-        color: #333333;
-        line-height: 1.45;
-      }
+body{
+margin:0;
+font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+background:#ffffff;
+color:#111111;
+}
 
-      .panels {
-        display: grid;
-        gap: 14px;
-        margin-top: 12px;
-      }
+.wrap{
+min-height:100vh;
+display:grid;
+place-items:center;
+padding:24px 14px;
+}
 
-      @media (min-width: 860px) {
-        .panels {
-          grid-template-columns: 1fr 1fr;
-          align-items: start;
-        }
-      }
+.card{
+width:100%;
+max-width:980px;
+background:#ffffff;
+border:1px solid #dddddd;
+border-radius:10px;
+padding:18px;
+}
 
-      .panel {
-        border: 1px solid #dddddd;
-        border-radius: 10px;
-        padding: 16px;
-        background: #ffffff;
-      }
+h1{
+margin:0 0 8px;
+font-size:24px;
+}
 
-      .panel h2 {
-        margin: 0 0 6px;
-        font-size: 18px;
-      }
+p{
+margin:0 0 16px;
+color:#333333;
+line-height:1.45;
+}
 
-      .panel p {
-        margin-bottom: 12px;
-      }
+.panels{
+display:grid;
+gap:14px;
+margin-top:12px;
+}
 
-      form {
-        display: grid;
-        gap: 10px;
-      }
+.panel{
+border:1px solid #dddddd;
+border-radius:10px;
+padding:16px;
+background:#ffffff;
+}
 
-      label {
-        font-weight: 600;
-        font-size: 14px;
-        color: #111111;
-      }
+.panel h2{
+margin:0 0 6px;
+font-size:18px;
+}
 
-      input[type="text"],
-      input[type="file"] {
-        width: 100%;
-        padding: 10px 10px;
-        border-radius: 8px;
-        border: 1px solid #cccccc;
-        background: #ffffff;
-        color: #111111;
-        outline: none;
-      }
+form{
+display:grid;
+gap:10px;
+}
 
-      input[type="text"]::placeholder {
-        color: #777777;
-      }
+label{
+font-weight:600;
+font-size:14px;
+}
 
-      input[type="text"]:focus,
-      input[type="file"]:focus {
-        border-color: #111111;
-        box-shadow: 0 0 0 2px #eeeeee;
-      }
+input[type="file"]{
+width:100%;
+padding:10px;
+border-radius:8px;
+border:1px solid #cccccc;
+}
 
-      button {
-        width: fit-content;
-        padding: 10px 14px;
-        border: 1px solid #111111;
-        border-radius: 8px;
-        background: #ffffff;
-        color: #111111;
-        font-weight: 700;
-        cursor: pointer;
-      }
+button{
+width:fit-content;
+padding:10px 14px;
+border:1px solid #111111;
+border-radius:8px;
+background:#ffffff;
+color:#111111;
+font-weight:700;
+cursor:pointer;
+}
 
-      button:hover {
-        background: #f5f5f5;
-      }
+button:hover{
+background:#f5f5f5;
+}
 
-      .alert {
-        margin-top: 10px;
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid #111111;
-        background: #ffffff;
-        color: #111111;
-      }
+.alert{
+margin-top:10px;
+padding:10px;
+border-radius:8px;
+border:1px dashed #111111;
+}
 
-      .alert-error {
-        border-style: dashed;
-      }
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:12px;
+margin-top:12px;
+}
 
-      .alert-info {
-        border-style: solid;
-      }
+.barcode-item{
+border:1px solid #dddddd;
+border-radius:10px;
+padding:12px;
+background:#ffffff;
+display:grid;
+gap:8px;
+}
 
-      .result {
-        margin-top: 14px;
-        padding-top: 14px;
-        border-top: 1px solid #dddddd;
-        display: grid;
-        gap: 10px;
-      }
+.barcode-box{
+background:#ffffff;
+border:1px solid #dddddd;
+border-radius:10px;
+padding:12px;
+min-height:96px;
+display:grid;
+place-items:center;
+}
 
-      .qr-box {
-        width: 260px;
-        height: 260px;
-        border-radius: 10px;
-        background: #ffffff;
-        border: 1px solid #dddddd;
-        display: grid;
-        place-items: center;
-        padding: 12px;
-      }
+.barcode-box img{
+width:100%;
+height:auto;
+object-fit:contain;
+}
 
-      .qr-box img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
+.barcode-value{
+color:#111111;
+font-size:14px;
+font-weight:700;
+overflow-wrap:anywhere;
+}
 
-      .hint {
-        color: #666666;
-        font-size: 13px;
-        margin: 0;
-      }
+.results-header{
+display:flex;
+align-items:baseline;
+justify-content:space-between;
+gap:12px;
+margin-top:12px;
+}
 
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 12px;
-        margin-top: 12px;
-      }
+.badge{
+display:inline-block;
+padding:3px 10px;
+border-radius:999px;
+border:1px solid #111111;
+background:#ffffff;
+font-size:12px;
+font-weight:700;
+}
 
-      .barcode-item {
-        border: 1px solid #dddddd;
-        border-radius: 10px;
-        padding: 12px;
-        background: #ffffff;
-        display: grid;
-        gap: 8px;
-      }
+</style>
 
-      .barcode-box {
-        background: #ffffff;
-        border: 1px solid #dddddd;
-        border-radius: 10px;
-        padding: 12px;
-        min-height: 96px;
-        display: grid;
-        place-items: center;
-      }
+</head>
 
-      .barcode-box img {
-        width: 100%;
-        height: auto;
-        object-fit: contain;
-      }
+<body>
 
-      .barcode-value {
-        color: #111111;
-        font-size: 14px;
-        font-weight: 700;
-        overflow-wrap: anywhere;
-      }
+<div class="wrap">
 
-      .row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        flex-wrap: wrap;
-      }
+<div class="card">
 
-      .check {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        user-select: none;
-        color: #111111;
-        font-size: 13px;
-        font-weight: 600;
-      }
+<h1>Barcode Generator</h1>
 
-      .check input {
-        width: 16px;
-        height: 16px;
-      }
+<p>
+Upload a CSV or XLSX file to generate Code128 barcodes and download them as ZIP.
+</p>
 
-      .results-header {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 12px;
-        margin-top: 12px;
-      }
+<div class="panels">
 
-      .badge {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 999px;
-        border: 1px solid #111111;
-        background: #ffffff;
-        color: #111111;
-        font-size: 12px;
-        font-weight: 700;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="card">
-        <h1>Barcode Generator</h1>
-        <p>Upload a CSV or XLSX file to generate Code128 barcodes and download them as a single PDF.</p>
+<div class="panel">
 
-        <div class="panels">
-          <div class="panel">
-            <h2>Bulk Barcodes (CSV/XLSX)</h2>
-            <p>
-              Upload a <b>.csv</b> or <b>.xlsx</b>. If you enter a column name, the first row is treated as a header.
-              If empty, the app uses the <b>first column</b>.
-            </p>
+<h2>Bulk Barcodes (CSV/XLSX)</h2>
 
-            <form action="{{ url_for('generate_barcodes') }}" method="post" enctype="multipart/form-data">
-              <div>
-                <label for="file">CSV/XLSX File</label><br />
-                <input id="file" name="file" type="file" accept=".csv,.xlsx" required />
-              </div>
+<form action="{{ url_for('generate_barcodes') }}" method="post" enctype="multipart/form-data">
 
-              <div>
-                <label for="column">Column name (optional)</label><br />
-                <input
-                  id="column"
-                  name="column"
-                  type="text"
-                  placeholder="e.g., product_code"
-                  value="{{ column }}"
-                />
-                <div class="row" style="margin-top: 8px">
-                  <label class="check">
-                    <input type="checkbox" name="has_header" {% if has_header %}checked{% endif %} />
-                    Has header row (recommended)
-                  </label>
-                  <p class="hint" style="margin: 0">Max</p>
-                </div>
-              </div>
+<label>CSV/XLSX File</label>
 
-              <button type="submit">Generate Barcodes</button>
-            </form>
+<input name="file" type="file" accept=".csv,.xlsx" required />
 
-            {% if barcode_error %}
-              <div class="alert {% if barcode_items %}alert-info{% else %}alert-error{% endif %}">
-                {{ barcode_error }}
-              </div>
-            {% endif %}
+<button type="submit">Generate Barcodes</button>
 
-            {% if barcode_items %}
-              <div class="results-header">
-                <p class="hint" style="margin: 0">Generated barcodes</p>
-                <span class="badge">{{ barcode_items|length }}</span>
-              </div>
+</form>
 
-              <form action="{{ url_for('download_barcodes') }}" method="get" style="margin-top: 8px">
-                <button type="submit">Download all as PDF</button>
-              </form>
+{% if barcode_error %}
 
-              <div class="grid">
-                {% for item in barcode_items %}
-                  <div class="barcode-item">
-                    <div class="barcode-box">
-                      <img src="{{ item.url }}" alt="Generated barcode" />
-                    </div>
-                    <div class="barcode-value">
-                      <strong>{{ item.value }}</strong><br>
-                      <span class="barcode-title">{{ item.title }}</span>
-                    </div>
-                  </div>
-                {% endfor %}
-              </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-  </body>
+<div class="alert">
+
+{{ barcode_error }}
+
+</div>
+
+{% endif %}
+
+
+{% if barcode_items %}
+
+<div class="results-header">
+
+<p style="margin:0">Generated barcodes</p>
+
+<span class="badge">1</span>
+
+</div>
+
+<form action="{{ url_for('download_barcodes') }}" method="get" style="margin-top:10px">
+
+<button type="submit">Download all as ZIP</button>
+
+</form>
+
+<div class="grid">
+
+{% for item in barcode_items %}
+
+<div class="barcode-item">
+
+<div class="barcode-box">
+
+<img src="{{ item.url }}" alt="Generated barcode">
+
+</div>
+
+<div class="barcode-value">
+
+<strong>{{ item.value }}</strong><br>
+
+<span>{{ item.title }}</span>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% endif %}
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</body>
 </html>
-
