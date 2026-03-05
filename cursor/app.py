@@ -2,7 +2,6 @@ import os
 import csv
 import io
 import zipfile
-from datetime import datetime, timedelta
 
 from flask import Flask, render_template, request, session, send_file
 from barcode import get_barcode_class
@@ -15,6 +14,9 @@ def create_app():
 
     app = Flask(__name__)
     app.secret_key = os.urandom(24)
+
+    # ensure folder exists
+    os.makedirs("static/barcodes", exist_ok=True)
 
     # ---------------- READ CSV ----------------
     def read_csv(file_bytes):
@@ -85,10 +87,8 @@ def create_app():
         for word in words:
 
             if len(current_line) + len(word) + 1 > max_chars:
-
                 lines.append(current_line)
                 current_line = word
-
             else:
 
                 if current_line:
@@ -107,8 +107,8 @@ def create_app():
         barcode_class = get_barcode_class("code128")
 
         barcode_options = {
-            "module_width": 0.35,
-            "module_height": 20,
+            "module_width": 0.9,
+            "module_height": 30,
             "font_size": 0,
             "quiet_zone": 8,
             "dpi": 200
@@ -124,7 +124,6 @@ def create_app():
 
         padding = 40
 
-        # -------- fonts --------
         try:
             sku_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 30)
             title_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 20)
@@ -132,7 +131,6 @@ def create_app():
             sku_font = ImageFont.load_default()
             title_font = ImageFont.load_default()
 
-        # -------- split title --------
         lines = split_text_into_lines(title, 45)
 
         line_height = title_font.getbbox("A")[3]
@@ -140,19 +138,13 @@ def create_app():
 
         new_height = barcode_img.height + padding + 60 + title_height + 40
 
-        new_img = Image.new(
-            "RGB",
-            (barcode_img.width, new_height),
-            (255, 255, 255)
-        )
+        new_img = Image.new("RGB", (barcode_img.width, new_height), (255, 255, 255))
 
         new_img.paste(barcode_img, (0, padding))
 
         draw = ImageDraw.Draw(new_img)
 
-        # -------- SKU --------
         sku_bbox = sku_font.getbbox(sku)
-
         sku_width = sku_bbox[2] - sku_bbox[0]
 
         sku_x = (new_img.width - sku_width) / 2
@@ -160,13 +152,11 @@ def create_app():
 
         draw.text((sku_x, sku_y), sku, font=sku_font, fill="black")
 
-        # -------- TITLE --------
         text_y = sku_y + 55
 
         for line in lines:
 
             bbox = title_font.getbbox(line)
-
             text_width = bbox[2] - bbox[0]
 
             text_x = (new_img.width - text_width) / 2
@@ -215,8 +205,6 @@ def create_app():
 
             preview_path = os.path.join("static", "barcodes", f"{sku}.png")
 
-            os.makedirs(os.path.dirname(preview_path), exist_ok=True)
-
             with open(preview_path, "wb") as f:
                 f.write(img_buffer.getbuffer())
 
@@ -227,7 +215,6 @@ def create_app():
             })
 
         session["barcodes"] = rows
-
         app.generated_buffers = results
 
         return render_template("index.html", barcode_items=results)
@@ -247,18 +234,22 @@ def create_app():
 
             for item in items:
 
-                img = Image.open(item["buffer"]).convert("RGB")
+                img_path = os.path.join("static", "barcodes", f"{item['value']}.png")
 
-                pdf_buffer = io.BytesIO()
+                if not os.path.exists(img_path):
+                    continue
 
-                img.save(pdf_buffer, "PDF", resolution=200.0)
+                with Image.open(img_path) as img:
 
-                pdf_buffer.seek(0)
+                    img = img.convert("RGB")
 
-                zip_file.writestr(
-                    f"{item['value']}.pdf",
-                    pdf_buffer.read()
-                )
+                    pdf_buffer = io.BytesIO()
+
+                    img.save(pdf_buffer, "PDF", resolution=150.0)
+
+                    pdf_buffer.seek(0)
+
+                    zip_file.writestr(f"{item['value']}.pdf", pdf_buffer.read())
 
         zip_buffer.seek(0)
 
