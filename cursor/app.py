@@ -138,15 +138,27 @@ def create_app():
         barcode_path = os.path.join(app.config["BARCODE_FOLDER"], f"barcode_{sku}")
 
         barcode_obj = barcode_class(sku, writer=ImageWriter())
-
         barcode_obj.save(barcode_path, options=barcode_options)
 
         barcode_img = Image.open(barcode_path + ".png")
 
-        # ---------- canvas ----------
         padding = 40
 
-        new_height = barcode_img.height + 180
+        # -------- fonts --------
+        try:
+            sku_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 30)
+            title_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 30)
+        except:
+            sku_font = ImageFont.load_default()
+            title_font = ImageFont.load_default()
+
+        # -------- split title --------
+        lines = split_text_into_lines(title, 45)
+
+        line_height = title_font.getbbox("A")[3]
+        title_height = (line_height + 10) * len(lines)
+
+        new_height = barcode_img.height + padding + 60 + title_height + 40
 
         new_img = Image.new(
             "RGB",
@@ -158,12 +170,7 @@ def create_app():
 
         draw = ImageDraw.Draw(new_img)
 
-        # ---------- SKU FONT ----------
-        try:
-            sku_font = ImageFont.truetype("arial.ttf", 40)
-        except:
-            sku_font = ImageFont.load_default()
-
+        # -------- SKU --------
         sku_bbox = sku_font.getbbox(sku)
 
         sku_width = sku_bbox[2] - sku_bbox[0]
@@ -173,14 +180,7 @@ def create_app():
 
         draw.text((sku_x, sku_y), sku, font=sku_font, fill="black")
 
-        # ---------- TITLE FONT ----------
-        try:
-            title_font = ImageFont.truetype("arial.ttf", 32)
-        except:
-            title_font = ImageFont.load_default()
-
-        lines = split_text_into_lines(title, 45)
-
+        # -------- TITLE --------
         text_y = sku_y + 55
 
         for line in lines:
@@ -279,17 +279,6 @@ def create_app():
                 )
 
         zip_buffer.seek(0)
-
-        # cleanup images
-        for item in items:
-
-            img_path = os.path.join(
-                app.config["BARCODE_FOLDER"],
-                f"{item['value']}.png"
-            )
-
-            if os.path.exists(img_path):
-                os.remove(img_path)
 
         return send_file(
             zip_buffer,
