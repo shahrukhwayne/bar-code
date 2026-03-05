@@ -16,33 +16,13 @@ def create_app():
     app = Flask(__name__)
     app.secret_key = os.urandom(24)
 
-    app.config["BARCODE_FOLDER"] = os.path.join(app.root_path, "static", "barcodes")
-
-    os.makedirs(app.config["BARCODE_FOLDER"], exist_ok=True)
-
-    # ---------------- CLEANUP ----------------
-    def cleanup_old_pngs(folder):
-
-        cutoff = datetime.now() - timedelta(minutes=30)
-
-        for name in os.listdir(folder):
-
-            if name.endswith(".png"):
-
-                path = os.path.join(folder, name)
-
-                if datetime.fromtimestamp(os.path.getmtime(path)) < cutoff:
-                    os.remove(path)
-
     # ---------------- READ CSV ----------------
     def read_csv(file_bytes):
 
         text = file_bytes.decode("utf-8-sig", errors="replace")
-
         stream = io.StringIO(text)
 
         reader = csv.reader(stream)
-
         next(reader, None)
 
         rows = []
@@ -66,7 +46,6 @@ def create_app():
     def read_xlsx(file_bytes):
 
         wb = load_workbook(filename=io.BytesIO(file_bytes), read_only=True)
-
         ws = wb.active
 
         rows = []
@@ -132,22 +111,23 @@ def create_app():
             "module_height": 20,
             "font_size": 0,
             "quiet_zone": 8,
-            "dpi": 600
+            "dpi": 200
         }
 
-        barcode_path = os.path.join(app.config["BARCODE_FOLDER"], f"barcode_{sku}")
-
         barcode_obj = barcode_class(sku, writer=ImageWriter())
-        barcode_obj.save(barcode_path, options=barcode_options)
 
-        barcode_img = Image.open(barcode_path + ".png")
+        buffer = io.BytesIO()
+        barcode_obj.write(buffer, options=barcode_options)
+        buffer.seek(0)
+
+        barcode_img = Image.open(buffer).convert("RGB")
 
         padding = 40
 
         # -------- fonts --------
         try:
             sku_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 30)
-            title_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 30)
+            title_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 20)
         except:
             sku_font = ImageFont.load_default()
             title_font = ImageFont.load_default()
@@ -195,11 +175,11 @@ def create_app():
 
             text_y += (bbox[3] - bbox[1]) + 10
 
-        final_path = os.path.join(app.config["BARCODE_FOLDER"], f"{sku}.png")
+        final_buffer = io.BytesIO()
+        new_img.save(final_buffer, format="PNG")
+        final_buffer.seek(0)
 
-        new_img.save(final_path)
-
-        return final_path
+        return final_buffer
 
     # ---------------- HOME ----------------
     @app.route("/")
@@ -210,8 +190,6 @@ def create_app():
     # ---------------- GENERATE ----------------
     @app.route("/generate-barcodes", methods=["POST"])
     def generate_barcodes():
-
-        cleanup_old_pngs(app.config["BARCODE_FOLDER"])
 
         uploaded = request.files.get("file")
 
@@ -233,15 +211,24 @@ def create_app():
 
         for sku, title in rows:
 
-            generate_barcode_image(sku, title)
+            img_buffer = generate_barcode_image(sku, title)
+
+            preview_path = os.path.join("static", "barcodes", f"{sku}.png")
+
+            os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+
+            with open(preview_path, "wb") as f:
+                f.write(img_buffer.getbuffer())
 
             results.append({
-                "url": "/static/barcodes/" + f"{sku}.png",
+                "url": "/" + preview_path,
                 "value": sku,
                 "title": title
             })
 
-        session["barcodes"] = results
+        session["barcodes"] = rows
+
+        app.generated_buffers = results
 
         return render_template("index.html", barcode_items=results)
 
@@ -249,7 +236,7 @@ def create_app():
     @app.route("/download-barcodes")
     def download_barcodes():
 
-        items = session.get("barcodes")
+        items = getattr(app, "generated_buffers", None)
 
         if not items:
             return render_template("index.html", barcode_error="Generate first")
@@ -260,16 +247,11 @@ def create_app():
 
             for item in items:
 
-                img_path = os.path.join(
-                    app.config["BARCODE_FOLDER"],
-                    f"{item['value']}.png"
-                )
-
-                img = Image.open(img_path).convert("RGB")
+                img = Image.open(item["buffer"]).convert("RGB")
 
                 pdf_buffer = io.BytesIO()
 
-                img.save(pdf_buffer, "PDF", resolution=300.0)
+                img.save(pdf_buffer, "PDF", resolution=200.0)
 
                 pdf_buffer.seek(0)
 
