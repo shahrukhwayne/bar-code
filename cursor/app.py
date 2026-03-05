@@ -3,7 +3,7 @@ import csv
 import io
 import zipfile
 
-from flask import Flask, render_template, request, session, send_file
+from flask import Flask, render_template, request, session, send_file, after_this_request
 from barcode import get_barcode_class
 from barcode.writer import ImageWriter
 from openpyxl import load_workbook
@@ -15,10 +15,10 @@ def create_app():
     app = Flask(__name__)
     app.secret_key = os.urandom(24)
 
-    # ensure folder exists
     os.makedirs("static/barcodes", exist_ok=True)
 
-    # ---------------- READ CSV ----------------
+# ---------------- READ CSV ----------------
+
     def read_csv(file_bytes):
 
         text = file_bytes.decode("utf-8-sig", errors="replace")
@@ -44,7 +44,9 @@ def create_app():
 
         return rows
 
-    # ---------------- READ XLSX ----------------
+
+# ---------------- READ XLSX ----------------
+
     def read_xlsx(file_bytes):
 
         wb = load_workbook(filename=io.BytesIO(file_bytes), read_only=True)
@@ -77,7 +79,9 @@ def create_app():
 
         return rows
 
-    # ---------------- TEXT WRAP ----------------
+
+# ---------------- TEXT WRAP ----------------
+
     def split_text_into_lines(text, max_chars=45):
 
         words = text.split(" ")
@@ -89,6 +93,7 @@ def create_app():
             if len(current_line) + len(word) + 1 > max_chars:
                 lines.append(current_line)
                 current_line = word
+
             else:
 
                 if current_line:
@@ -101,7 +106,9 @@ def create_app():
 
         return lines
 
-    # ---------------- GENERATE BARCODE ----------------
+
+# ---------------- BARCODE IMAGE ----------------
+
     def generate_barcode_image(sku, title):
 
         barcode_class = get_barcode_class("code128")
@@ -171,15 +178,25 @@ def create_app():
 
         return final_buffer
 
-    # ---------------- HOME ----------------
+
+# ---------------- HOME ----------------
+
     @app.route("/")
     def index():
 
         return render_template("index.html", barcode_items=None)
 
-    # ---------------- GENERATE ----------------
+
+# ---------------- GENERATE ----------------
+
     @app.route("/generate-barcodes", methods=["POST"])
     def generate_barcodes():
+
+        # delete old preview if exists
+        preview_path = "static/barcodes/preview.png"
+
+        if os.path.exists(preview_path):
+            os.remove(preview_path)
 
         uploaded = request.files.get("file")
 
@@ -197,51 +214,53 @@ def create_app():
         else:
             return render_template("index.html", barcode_error="Only CSV/XLSX allowed")
 
+        session["barcode_rows"] = rows
+
         results = []
 
-        for sku, title in rows:
+        if rows:
+
+            sku, title = rows[0]
 
             img_buffer = generate_barcode_image(sku, title)
-
-            preview_path = os.path.join("static", "barcodes", f"{sku}.png")
 
             with open(preview_path, "wb") as f:
                 f.write(img_buffer.getbuffer())
 
             results.append({
-                "url": "/" + preview_path,
+                "url": "/static/barcodes/preview.png",
                 "value": sku,
                 "title": title
             })
 
-        session["barcodes"] = rows
-        app.generated_buffers = results
-
         return render_template("index.html", barcode_items=results)
 
-    # ---------------- DOWNLOAD ----------------
+
+# ---------------- DOWNLOAD ----------------
+
     @app.route("/download-barcodes")
     def download_barcodes():
 
-        items = getattr(app, "generated_buffers", None)
+        rows = session.get("barcode_rows")
 
-        if not items:
+        if not rows:
             return render_template("index.html", barcode_error="Generate first")
 
         zip_buffer = io.BytesIO()
 
+        BATCH_SIZE = 200
+
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
 
-            for item in items:
+            for i in range(0, len(rows), BATCH_SIZE):
 
-                img_path = os.path.join("static", "barcodes", f"{item['value']}.png")
+                batch = rows[i:i+BATCH_SIZE]
 
-                if not os.path.exists(img_path):
-                    continue
+                for sku, title in batch:
 
-                with Image.open(img_path) as img:
+                    img_buffer = generate_barcode_image(sku, title)
 
-                    img = img.convert("RGB")
+                    img = Image.open(img_buffer).convert("RGB")
 
                     pdf_buffer = io.BytesIO()
 
@@ -249,9 +268,22 @@ def create_app():
 
                     pdf_buffer.seek(0)
 
-                    zip_file.writestr(f"{item['value']}.pdf", pdf_buffer.read())
+                    zip_file.writestr(f"{sku}.pdf", pdf_buffer.read())
 
         zip_buffer.seek(0)
+
+        preview_path = "static/barcodes/preview.png"
+
+        @after_this_request
+        def cleanup(response):
+
+            try:
+                if os.path.exists(preview_path):
+                    os.remove(preview_path)
+            except Exception:
+                pass
+
+            return response
 
         return send_file(
             zip_buffer,
