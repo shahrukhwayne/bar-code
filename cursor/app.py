@@ -96,21 +96,18 @@ def create_app():
 
         return rows
 
-    # ---------------- TEXT LINE BREAK ----------------
-    def split_text_into_lines(text, max_length=60):
+    # ---------------- TEXT WRAP ----------------
+    def split_text_into_lines(text, max_chars=45):
 
         words = text.split(" ")
-
         lines = []
-
         current_line = ""
 
         for word in words:
 
-            if len(current_line) + len(word) + 1 > max_length:
+            if len(current_line) + len(word) + 1 > max_chars:
 
                 lines.append(current_line)
-
                 current_line = word
 
             else:
@@ -131,10 +128,10 @@ def create_app():
         barcode_class = get_barcode_class("code128")
 
         barcode_options = {
-            "module_width": 0.7,
-            "module_height": 35,
+            "module_width": 0.35,
+            "module_height": 20,
             "font_size": 0,
-            "quiet_zone": 12,
+            "quiet_zone": 8,
             "dpi": 600
         }
 
@@ -146,7 +143,10 @@ def create_app():
 
         barcode_img = Image.open(barcode_path + ".png")
 
-        new_height = barcode_img.height + 200
+        # ---------- canvas ----------
+        padding = 40
+
+        new_height = barcode_img.height + 180
 
         new_img = Image.new(
             "RGB",
@@ -154,13 +154,13 @@ def create_app():
             (255, 255, 255)
         )
 
-        new_img.paste(barcode_img, (0, 10))
+        new_img.paste(barcode_img, (0, padding))
 
         draw = ImageDraw.Draw(new_img)
 
-        # SKU FONT
+        # ---------- SKU FONT ----------
         try:
-            sku_font = ImageFont.truetype("arial.ttf", 55)
+            sku_font = ImageFont.truetype("arial.ttf", 40)
         except:
             sku_font = ImageFont.load_default()
 
@@ -169,20 +169,19 @@ def create_app():
         sku_width = sku_bbox[2] - sku_bbox[0]
 
         sku_x = (new_img.width - sku_width) / 2
-
-        sku_y = barcode_img.height + 10
+        sku_y = barcode_img.height + padding + 5
 
         draw.text((sku_x, sku_y), sku, font=sku_font, fill="black")
 
-        # TITLE FONT
+        # ---------- TITLE FONT ----------
         try:
-            title_font = ImageFont.truetype("arial.ttf", 40)
+            title_font = ImageFont.truetype("arial.ttf", 32)
         except:
             title_font = ImageFont.load_default()
 
-        lines = split_text_into_lines(title, 60)
+        lines = split_text_into_lines(title, 45)
 
-        text_y = sku_y + 70
+        text_y = sku_y + 55
 
         for line in lines:
 
@@ -194,7 +193,7 @@ def create_app():
 
             draw.text((text_x, text_y), line, font=title_font, fill="black")
 
-            text_y += (bbox[3] - bbox[1]) + 15
+            text_y += (bbox[3] - bbox[1]) + 10
 
         final_path = os.path.join(app.config["BARCODE_FOLDER"], f"{sku}.png")
 
@@ -261,7 +260,10 @@ def create_app():
 
             for item in items:
 
-                img_path = os.path.join(app.config["BARCODE_FOLDER"], f"{item['value']}.png")
+                img_path = os.path.join(
+                    app.config["BARCODE_FOLDER"],
+                    f"{item['value']}.png"
+                )
 
                 img = Image.open(img_path).convert("RGB")
 
@@ -271,14 +273,20 @@ def create_app():
 
                 pdf_buffer.seek(0)
 
-                zip_file.writestr(f"{item['value']}.pdf", pdf_buffer.read())
+                zip_file.writestr(
+                    f"{item['value']}.pdf",
+                    pdf_buffer.read()
+                )
 
         zip_buffer.seek(0)
 
-        # delete images after download
+        # cleanup images
         for item in items:
 
-            img_path = os.path.join(app.config["BARCODE_FOLDER"], f"{item['value']}.png")
+            img_path = os.path.join(
+                app.config["BARCODE_FOLDER"],
+                f"{item['value']}.png"
+            )
 
             if os.path.exists(img_path):
                 os.remove(img_path)
