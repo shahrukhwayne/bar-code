@@ -162,7 +162,6 @@ font-weight:700;
 }
 
 </style>
-
 </head>
 
 <body>
@@ -196,13 +195,10 @@ Upload a CSV or XLSX file to generate Code128 barcodes and download them as ZIP.
 {% if barcode_error %}
 
 <div class="alert">
-
 {{ barcode_error }}
-
 </div>
 
 {% endif %}
-
 
 {% if barcode_items %}
 
@@ -216,7 +212,19 @@ Upload a CSV or XLSX file to generate Code128 barcodes and download them as ZIP.
 
 <form action="{{ url_for('download_barcodes') }}" method="get" style="margin-top:10px">
 
-<button type="submit">Download all as ZIP</button>
+<button type="submit" onclick="startProgress()">Download all as ZIP</button>
+
+<div id="progressBox" style="display:none;margin-top:20px">
+
+<div style="width:100%;background:#eee;border-radius:8px;overflow:hidden">
+
+<div id="progressBar" style="width:0%;background:#111;height:20px"></div>
+
+</div>
+
+<p id="progressText">Starting...</p>
+
+</div>
 
 </form>
 
@@ -227,17 +235,12 @@ Upload a CSV or XLSX file to generate Code128 barcodes and download them as ZIP.
 <div class="barcode-item">
 
 <div class="barcode-box">
-
 <img src="{{ item.url }}" alt="Generated barcode">
-
 </div>
 
 <div class="barcode-value">
-
 <strong>{{ item.value }}</strong><br>
-
 <span>{{ item.title }}</span>
-
 </div>
 
 </div>
@@ -255,6 +258,40 @@ Upload a CSV or XLSX file to generate Code128 barcodes and download them as ZIP.
 </div>
 
 </div>
+<script>
+
+function startProgress(){
+
+document.getElementById("progressBox").style.display="block"
+
+let interval=setInterval(async ()=>{
+
+let res=await fetch("/progress")
+
+let data=await res.json()
+
+if(data.total===0)return
+
+let percent=(data.current/data.total)*100
+
+document.getElementById("progressBar").style.width=percent+"%"
+
+document.getElementById("progressText").innerText=
+data.current+" / "+data.total+" generated"
+
+if(data.current>=data.total){
+
+clearInterval(interval)
+
+document.getElementById("progressText").innerText="Download starting..."
+
+}
+
+},500)
+
+}
+
+</script>
 
 </body>
 </html>
