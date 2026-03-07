@@ -23,6 +23,9 @@ except:
     TITLE_FONT = ImageFont.load_default()
 
 
+CODE128 = get_barcode_class("code128")
+
+
 def create_app():
 
     app = Flask(__name__)
@@ -136,7 +139,6 @@ def create_app():
 
     def generate_barcode_image(sku, title):
 
-        barcode_class = get_barcode_class("code128")
 
         options = {
             "module_width": 0.9,
@@ -146,7 +148,7 @@ def create_app():
             "dpi": 200
         }
 
-        barcode = barcode_class(sku, writer=ImageWriter())
+        barcode = CODE128(sku, writer=ImageWriter())
 
         buffer = io.BytesIO()
 
@@ -216,7 +218,7 @@ def create_app():
         pdf_buffer = io.BytesIO()
 
         img = Image.open(img_buffer)
-        img.save(pdf_buffer, "PDF", resolution=150.0)
+        img.save(pdf_buffer, "PDF", resolution=120.0)
 
         pdf_buffer.seek(0)
 
