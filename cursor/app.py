@@ -2,12 +2,23 @@ import os
 import csv
 import io
 import zipfile
+import base64
+import time
 
-from flask import Flask, render_template, request, session, send_file, after_this_request
+from flask import Flask, render_template, request, send_file
 from barcode import get_barcode_class
 from barcode.writer import ImageWriter
 from openpyxl import load_workbook
 from PIL import Image, ImageDraw, ImageFont
+from concurrent.futures import ThreadPoolExecutor
+
+
+try:
+    SKU_FONT = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 30)
+    TITLE_FONT = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 20)
+except:
+    SKU_FONT = ImageFont.load_default()
+    TITLE_FONT = ImageFont.load_default()
 
 
 def create_app():
@@ -16,15 +27,22 @@ def create_app():
     app.secret_key = os.urandom(24)
 
     os.makedirs("static/barcodes", exist_ok=True)
+    progress_status = {
+    "current": 0,
+    "total": 0
+}
 
-# ---------------- READ CSV ----------------
+
+# ---------------- READ CSV ---------------- #
 
     def read_csv(file_bytes):
 
         text = file_bytes.decode("utf-8-sig", errors="replace")
+
         stream = io.StringIO(text)
 
         reader = csv.reader(stream)
+
         next(reader, None)
 
         rows = []
@@ -45,17 +63,19 @@ def create_app():
         return rows
 
 
-# ---------------- READ XLSX ----------------
+# ---------------- READ XLSX ---------------- #
 
     def read_xlsx(file_bytes):
 
         wb = load_workbook(filename=io.BytesIO(file_bytes), read_only=True)
+
         ws = wb.active
 
         rows = []
 
         for i, row in enumerate(ws.iter_rows(values_only=True)):
 
+            # skip header
             if i == 0:
                 continue
 
@@ -63,7 +83,6 @@ def create_app():
                 continue
 
             sku = row[0]
-            title = row[1]
 
             if not sku:
                 continue
@@ -73,47 +92,51 @@ def create_app():
             if not sku or sku.lower() == "none":
                 continue
 
-            title = "" if title is None else str(title).strip()
+            title = "" if row[1] is None else str(row[1]).strip()
 
             rows.append((sku, title))
 
         return rows
 
 
-# ---------------- TEXT WRAP ----------------
+# ---------------- TEXT WRAP ---------------- #
 
     def split_text_into_lines(text, max_chars=45):
 
         words = text.split(" ")
+
         lines = []
-        current_line = ""
+
+        current = ""
 
         for word in words:
 
-            if len(current_line) + len(word) + 1 > max_chars:
-                lines.append(current_line)
-                current_line = word
+            if len(current) + len(word) + 1 > max_chars:
+
+                lines.append(current)
+
+                current = word
 
             else:
 
-                if current_line:
-                    current_line += " "
+                if current:
+                    current += " "
 
-                current_line += word
+                current += word
 
-        if current_line:
-            lines.append(current_line)
+        if current:
+            lines.append(current)
 
         return lines
 
 
-# ---------------- BARCODE IMAGE ----------------
+# ---------------- BARCODE IMAGE ---------------- #
 
     def generate_barcode_image(sku, title):
 
         barcode_class = get_barcode_class("code128")
 
-        barcode_options = {
+        options = {
             "module_width": 0.9,
             "module_height": 30,
             "font_size": 0,
@@ -121,26 +144,22 @@ def create_app():
             "dpi": 200
         }
 
-        barcode_obj = barcode_class(sku, writer=ImageWriter())
+        barcode = barcode_class(sku, writer=ImageWriter())
 
         buffer = io.BytesIO()
-        barcode_obj.write(buffer, options=barcode_options)
+
+        barcode.write(buffer, options)
+
         buffer.seek(0)
 
         barcode_img = Image.open(buffer).convert("RGB")
 
         padding = 40
 
-        try:
-            sku_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 30)
-            title_font = ImageFont.truetype("font/DejaVuSans-Bold.ttf", 20)
-        except:
-            sku_font = ImageFont.load_default()
-            title_font = ImageFont.load_default()
+        lines = split_text_into_lines(title)
 
-        lines = split_text_into_lines(title, 45)
+        line_height = TITLE_FONT.getbbox("A")[3]
 
-        line_height = title_font.getbbox("A")[3]
         title_height = (line_height + 10) * len(lines)
 
         new_height = barcode_img.height + padding + 60 + title_height + 40
@@ -151,35 +170,59 @@ def create_app():
 
         draw = ImageDraw.Draw(new_img)
 
-        sku_bbox = sku_font.getbbox(sku)
+        sku_bbox = SKU_FONT.getbbox(sku)
+
         sku_width = sku_bbox[2] - sku_bbox[0]
 
         sku_x = (new_img.width - sku_width) / 2
+
         sku_y = barcode_img.height + padding + 5
 
-        draw.text((sku_x, sku_y), sku, font=sku_font, fill="black")
+        draw.text((sku_x, sku_y), sku, font=SKU_FONT, fill="black")
 
         text_y = sku_y + 55
 
         for line in lines:
 
-            bbox = title_font.getbbox(line)
+            bbox = TITLE_FONT.getbbox(line)
+
             text_width = bbox[2] - bbox[0]
 
             text_x = (new_img.width - text_width) / 2
 
-            draw.text((text_x, text_y), line, font=title_font, fill="black")
+            draw.text((text_x, text_y), line, font=TITLE_FONT, fill="black")
 
             text_y += (bbox[3] - bbox[1]) + 10
 
-        final_buffer = io.BytesIO()
-        new_img.save(final_buffer, format="PNG")
-        final_buffer.seek(0)
+        final = io.BytesIO()
 
-        return final_buffer
+        new_img.save(final, format="PNG")
+
+        final.seek(0)
+
+        return final
 
 
-# ---------------- HOME ----------------
+# ---------------- PARALLEL WORKER ---------------- #
+
+    def generate_pdf_barcode(data):
+
+        sku, title, index = data
+
+        img_buffer = generate_barcode_image(sku, title)
+
+        pdf_buffer = io.BytesIO()
+
+        Image.open(img_buffer).save(pdf_buffer, "PDF", resolution=150.0)
+
+        pdf_buffer.seek(0)
+
+        safe_name = sku.replace(" ", "_")
+
+        return f"{safe_name}_{index}.pdf", pdf_buffer.read()
+
+
+# ---------------- HOME ---------------- #
 
     @app.route("/")
     def index():
@@ -187,16 +230,10 @@ def create_app():
         return render_template("index.html", barcode_items=None)
 
 
-# ---------------- GENERATE ----------------
+# ---------------- GENERATE ---------------- #
 
     @app.route("/generate-barcodes", methods=["POST"])
     def generate_barcodes():
-
-        # delete old preview if exists
-        preview_path = "static/barcodes/preview.png"
-
-        if os.path.exists(preview_path):
-            os.remove(preview_path)
 
         uploaded = request.files.get("file")
 
@@ -214,7 +251,9 @@ def create_app():
         else:
             return render_template("index.html", barcode_error="Only CSV/XLSX allowed")
 
-        session["barcode_rows"] = rows
+        print("UPLOADED ROWS:", len(rows))
+
+        app.config["BARCODE_ROWS"] = rows
 
         results = []
 
@@ -224,11 +263,9 @@ def create_app():
 
             img_buffer = generate_barcode_image(sku, title)
 
-            with open(preview_path, "wb") as f:
-                f.write(img_buffer.getbuffer())
-
             results.append({
-                "url": "/static/barcodes/preview.png",
+                "url": "data:image/png;base64," +
+                base64.b64encode(img_buffer.getvalue()).decode(),
                 "value": sku,
                 "title": title
             })
@@ -236,54 +273,55 @@ def create_app():
         return render_template("index.html", barcode_items=results)
 
 
-# ---------------- DOWNLOAD ----------------
+# ---------------- DOWNLOAD ---------------- #
+
+    @app.route("/progress")
+    def progress():
+        return {
+            "current": progress_status["current"],
+            "total": progress_status["total"]
+        }
 
     @app.route("/download-barcodes")
     def download_barcodes():
+       
 
-        rows = session.get("barcode_rows")
+        start_time = time.time()
 
-        if not rows:
-            return render_template("index.html", barcode_error="Generate first")
+        rows = app.config.get("BARCODE_ROWS")
+        progress_status["current"] = 0
+        progress_status["total"] = len(rows)
+
+
+        print("TOTAL ROWS:", len(rows))
 
         zip_buffer = io.BytesIO()
 
-        BATCH_SIZE = 200
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_STORED) as zip_file:
 
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            index_data = [(sku, title, i) for i, (sku, title) in enumerate(rows)]
 
-            for i in range(0, len(rows), BATCH_SIZE):
+            with ThreadPoolExecutor(max_workers=6) as executor:
 
-                batch = rows[i:i+BATCH_SIZE]
+                results = executor.map(generate_pdf_barcode, index_data)
 
-                for sku, title in batch:
+                count = 0
 
-                    img_buffer = generate_barcode_image(sku, title)
+                for filename, pdf_data in results:
 
-                    img = Image.open(img_buffer).convert("RGB")
+                    zip_file.writestr(filename, pdf_data)
 
-                    pdf_buffer = io.BytesIO()
+                    count += 1
+                    progress_status["current"] = count
 
-                    img.save(pdf_buffer, "PDF", resolution=150.0)
-
-                    pdf_buffer.seek(0)
-
-                    zip_file.writestr(f"{sku}.pdf", pdf_buffer.read())
+                    if count % 100 == 0:
+                        print("Generated:", count)
 
         zip_buffer.seek(0)
 
-        preview_path = "static/barcodes/preview.png"
+        end_time = time.time()
 
-        @after_this_request
-        def cleanup(response):
-
-            try:
-                if os.path.exists(preview_path):
-                    os.remove(preview_path)
-            except Exception:
-                pass
-
-            return response
+        print("TOTAL TIME:", round(end_time - start_time, 2), "seconds")
 
         return send_file(
             zip_buffer,
@@ -297,5 +335,7 @@ def create_app():
 
 app = create_app()
 
+
 if __name__ == "__main__":
+
     app.run(debug=True)
