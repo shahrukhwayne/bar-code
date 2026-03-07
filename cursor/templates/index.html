@@ -218,7 +218,8 @@ Upload a CSV or XLSX file to generate Code128 barcodes and download them as ZIP.
 
 <div style="width:100%;background:#eee;border-radius:8px;overflow:hidden">
 
-<div id="progressBar" style="width:0%;background:#111;height:20px"></div>
+<div id="progressBar"
+style="width:0%;background:#111;height:20px"></div>
 
 </div>
 
@@ -266,6 +267,8 @@ document.getElementById("progressBox").style.display="block"
 
 let interval=setInterval(async ()=>{
 
+try{
+
 let res=await fetch("/progress")
 
 let data=await res.json()
@@ -283,8 +286,13 @@ if(data.current>=data.total){
 
 clearInterval(interval)
 
-document.getElementById("progressText").innerText="Download starting..."
+document.getElementById("progressText").innerText=
+"Preparing download..."
 
+}
+
+}catch(e){
+console.log(e)
 }
 
 },500)
