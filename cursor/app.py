@@ -4,8 +4,9 @@ import io
 import zipfile
 import base64
 import time
+import tempfile
 
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file , after_this_request
 from barcode import get_barcode_class
 from barcode.writer import ImageWriter
 from openpyxl import load_workbook
@@ -284,20 +285,23 @@ def create_app():
 
     @app.route("/download-barcodes")
     def download_barcodes():
-       
 
         start_time = time.time()
 
         rows = app.config.get("BARCODE_ROWS")
+
+        if not rows:
+            return render_template("index.html", barcode_error="Generate barcodes first")
+
         progress_status["current"] = 0
         progress_status["total"] = len(rows)
 
-
         print("TOTAL ROWS:", len(rows))
 
-        zip_buffer = io.BytesIO()
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+        zip_path = temp_file.name
 
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_STORED) as zip_file:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zip_file:
 
             index_data = [(sku, title, i) for i, (sku, title) in enumerate(rows)]
 
@@ -317,14 +321,20 @@ def create_app():
                     if count % 100 == 0:
                         print("Generated:", count)
 
-        zip_buffer.seek(0)
-
         end_time = time.time()
 
         print("TOTAL TIME:", round(end_time - start_time, 2), "seconds")
 
+        @after_this_request
+        def cleanup(response):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+            return response
+
         return send_file(
-            zip_buffer,
+            zip_path,
             mimetype="application/zip",
             as_attachment=True,
             download_name="barcodes.zip"
@@ -338,4 +348,4 @@ app = create_app()
 
 if __name__ == "__main__":
 
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False)
