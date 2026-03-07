@@ -214,13 +214,20 @@ def create_app():
 
         pdf_buffer = io.BytesIO()
 
-        Image.open(img_buffer).save(pdf_buffer, "PDF", resolution=150.0)
+        img = Image.open(img_buffer)
+        img.save(pdf_buffer, "PDF", resolution=150.0)
 
         pdf_buffer.seek(0)
 
         safe_name = sku.replace(" ", "_")
 
-        return f"{safe_name}_{index}.pdf", pdf_buffer.read()
+        data = pdf_buffer.read()
+
+        img.close()
+        img_buffer.close()
+        pdf_buffer.close()
+
+        return f"{safe_name}_{index}.pdf", data
 
 
 # ---------------- HOME ---------------- #
@@ -305,13 +312,19 @@ def create_app():
 
             index_data = [(sku, title, i) for i, (sku, title) in enumerate(rows)]
 
-            with ThreadPoolExecutor(max_workers=6) as executor:
+            count = 0
 
-                results = executor.map(generate_pdf_barcode, index_data)
+            for sku, title, index in index_data:
 
-                count = 0
+                filename, pdf_data = generate_pdf_barcode((sku, title, index))
 
-                for filename, pdf_data in results:
+                zip_file.writestr(filename, pdf_data)
+
+                count += 1
+                progress_status["current"] = count
+
+                if count % 50 == 0:
+                    print("Generated:", count)
 
                     zip_file.writestr(filename, pdf_data)
 
