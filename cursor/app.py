@@ -5,6 +5,7 @@ import zipfile
 import base64
 import time
 import tempfile
+import gc
 
 from flask import Flask, render_template, request, send_file , after_this_request
 from barcode import get_barcode_class
@@ -315,16 +316,17 @@ def create_app():
             count = 0
 
             for sku, title, index in index_data:
-
+                print("processing",sku)
                 filename, pdf_data = generate_pdf_barcode((sku, title, index))
-
                 zip_file.writestr(filename, pdf_data)
+                del pdf_data
 
                 count += 1
                 progress_status["current"] = count
 
                 if count % 50 == 0:
                     print("Generated:", count)
+                    gc.collect()
 
                     zip_file.writestr(filename, pdf_data)
 
