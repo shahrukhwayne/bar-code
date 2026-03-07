@@ -316,25 +316,28 @@ def create_app():
             count = 0
 
             for sku, title, index in index_data:
-                print("processing",sku)
-                filename, pdf_data = generate_pdf_barcode((sku, title, index))
-                zip_file.writestr(filename, pdf_data)
-                del pdf_data
 
-                count += 1
-                progress_status["current"] = count
+                print("processing", sku)
 
-                if count % 50 == 0:
-                    print("Generated:", count)
-                    gc.collect()
+                try:
+
+                    filename, pdf_data = generate_pdf_barcode((sku, title, index))
 
                     zip_file.writestr(filename, pdf_data)
+
+                    del pdf_data
 
                     count += 1
                     progress_status["current"] = count
 
-                    if count % 100 == 0:
+                    if count % 50 == 0:
                         print("Generated:", count)
+                        gc.collect()
+
+                except Exception as e:
+
+                    print("ERROR:", sku, str(e))
+                    continue
 
         end_time = time.time()
 
