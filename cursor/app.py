@@ -211,18 +211,20 @@ def create_app():
 
     def generate_pdf_barcode(data):
 
-        sku, title, index = data
+        sku, title,index = data
 
         img_buffer = generate_barcode_image(sku, title)
 
         pdf_buffer = io.BytesIO()
 
+        img_buffer.seek(0)
         img = Image.open(img_buffer)
         img.save(pdf_buffer, "PDF", resolution=120.0)
+        safe_name = "".join(c if c.isalnum() else "_" for c in sku)
+
+
 
         pdf_buffer.seek(0)
-
-        safe_name = sku.replace(" ", "_")
 
         data = pdf_buffer.read()
 
@@ -230,7 +232,7 @@ def create_app():
         img_buffer.close()
         pdf_buffer.close()
 
-        return f"{safe_name}_{index}.pdf", data
+        return f"{safe_name}.pdf", data
 
 
 # ---------------- HOME ---------------- #
@@ -281,7 +283,7 @@ def create_app():
                 "title": title
             })
 
-        return render_template("index.html", barcode_items=results)
+        return render_template("index.html", barcode_items=results, data_rows = len(rows))
 
 
 # ---------------- DOWNLOAD ---------------- #
